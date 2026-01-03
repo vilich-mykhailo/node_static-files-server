@@ -16,7 +16,7 @@ function createServer() {
       return;
     }
 
-    if (!url.startsWith('/file/')) {
+    if (url !== '/file' && !url.startsWith('/file/')) {
       res.statusCode = 200;
       res.setHeader('Content-Type', 'text/plain');
 

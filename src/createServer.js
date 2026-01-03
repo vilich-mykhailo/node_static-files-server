@@ -1,71 +1,72 @@
 'use strict';
 
-const http = require('http');
 const fs = require('fs');
+const http = require('http');
 const path = require('path');
 
+const publicDir = path.join(__dirname, '..', 'public');
+
 function createServer() {
-  return http.createServer((req, res) => {
-    const url = req.url || '';
-    let requestPath = url.slice('/file/'.length);
+  /* Write your code here */
+  // Return instance of http.Server class
 
-    if (!url.startsWith('/file')) {
-      res.writeHead(400, { 'Content-Type': 'text/plain' });
-      res.end('Use /file/<filename> to load files');
+  return http.createServer(async (req, res) => {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const pathname = url.pathname;
 
-      return;
+    res.setHeader('Content-type', 'text/plain');
+
+    if (!pathname.startsWith('/file')) {
+      res.statusCode = 400;
+
+      return res.end(
+        'Hint: download file from public dir, ' +
+          'using a part of the path after /file/',
+      );
     }
 
-    if (url !== '/file' && !url.startsWith('/file/')) {
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'text/plain');
+    let filePath = pathname.slice('/file'.length);
 
-      return res.end('Use /file/<filename> to load files');
+    if (filePath === '' || filePath === '/') {
+      filePath = '/index.html';
     }
 
-    if (requestPath === '') {
-      requestPath = 'index.html';
+    const resolvedPath = path.resolve(publicDir + filePath);
+
+    if (!resolvedPath.startsWith(publicDir)) {
+      res.statusCode = 404;
+
+      return res.end('Not Found');
     }
 
-    if (requestPath.startsWith('/')) {
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not Found');
+    if (!fs.existsSync(resolvedPath)) {
+      res.statusCode = 404;
 
-      return;
+      return res.end('Not Found');
     }
 
-    const publicDir = path.resolve(__dirname, '..', 'public');
+    if (req.url.includes('//')) {
+      res.statusCode = 404;
 
-    const filePath = path.resolve(publicDir, requestPath);
-
-    const relative = path.relative(publicDir, filePath);
-
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      res.writeHead(400, { 'Content-Type': 'text/plain' });
-      res.end('Bad Request');
-
-      return;
+      return res.end('Do not use double slash');
     }
 
-    fs.stat(filePath, (statErr, stats) => {
-      if (statErr || !stats.isFile()) {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
+    if (req.url.includes('..')) {
+      res.statusCode = 400;
+
+      return res.end('Access denied');
+    }
+
+    fs.readFile(resolvedPath, 'utf-8', (err, data) => {
+      if (err) {
+        res.statusCode = 404;
         res.end('Not Found');
 
         return;
       }
 
-      fs.readFile(filePath, (readErr, data) => {
-        if (readErr) {
-          res.writeHead(500, { 'Content-Type': 'text/plain' });
-          res.end('Internal Server Error');
-
-          return;
-        }
-
-        res.writeHead(200);
-        res.end(data);
-      });
+      res.statusCode = 200;
+      res.end(data);
     });
   });
 }
